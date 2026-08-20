@@ -11,15 +11,26 @@ export function useVisits(visitorId: string) {
     // Load from Dexie immediately for instant display
     db.visits.where('visitor_id').equals(visitorId).toArray().then(setVisits)
 
-    // Fetch from Supabase and upsert into Dexie so checkmarks sync across devices
+    // Fetch from Supabase and replace Dexie — source of truth is always Supabase
     supabase
       .from('visits')
       .select('id, visitor_id, exhibitor_id, visited_at, day, rating')
       .eq('visitor_id', visitorId)
       .then(async ({ data }) => {
-        if (!data || data.length === 0) return
-        const remote: LocalVisit[] = data.map(v => ({ ...v, synced: true }))
-        await db.visits.bulkPut(remote)
+        if (data === null) return
+        // Delete rows that no longer exist in Supabase
+        const remoteIds = new Set(data.map(v => v.id))
+        const local = await db.visits.where('visitor_id').equals(visitorId).toArray()
+        // Only remove rows that were already synced — never remove pending-upload rows
+        const toDelete = local
+          .filter(v => v.synced && !remoteIds.has(v.id))
+          .map(v => v.id)
+        if (toDelete.length > 0) await db.visits.bulkDelete(toDelete)
+        // Upsert remote rows
+        if (data.length > 0) {
+          const remote: LocalVisit[] = data.map(v => ({ ...v, synced: true }))
+          await db.visits.bulkPut(remote)
+        }
         const updated = await db.visits.where('visitor_id').equals(visitorId).toArray()
         setVisits(updated)
       })

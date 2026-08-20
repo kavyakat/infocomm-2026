@@ -34,10 +34,15 @@ describe('useVisits', () => {
     })
   })
 
-  it('reads visits already in Dexie', async () => {
+  it('reads visits that are already synced in both Dexie and Supabase', async () => {
+    const visitedAt = new Date().toISOString()
     await db.visits.put({
       id: 'v1', visitor_id: 'u1', exhibitor_id: 'e1',
-      visited_at: new Date().toISOString(), day: 1, rating: null, synced: true,
+      visited_at: visitedAt, day: 1, rating: null, synced: true,
+    })
+    mockSupabaseVisits.push({
+      id: 'v1', visitor_id: 'u1', exhibitor_id: 'e1',
+      visited_at: visitedAt, day: 1, rating: null,
     })
 
     const { result } = renderHook(() => useVisits('u1'))
@@ -82,10 +87,22 @@ describe('useVisits', () => {
     })
   })
 
-  it('does nothing when visitorId is empty', async () => {
-    const { result } = renderHook(() => useVisits(''))
-    await waitFor(() => {
-      expect(result.current.visits).toHaveLength(0)
+  it('clears Dexie when Supabase returns empty — handles manual database deletions', async () => {
+    // Pre-populate Dexie as if from a previous session
+    await db.visits.put({
+      id: 'v-stale', visitor_id: 'u1', exhibitor_id: 'e-stale',
+      visited_at: new Date().toISOString(), day: 1, rating: null, synced: true,
     })
+    // Supabase returns nothing (row was deleted)
+    mockSupabaseVisits.length = 0
+
+    const { result } = renderHook(() => useVisits('u1'))
+
+    await waitFor(() => {
+      expect(result.current.hasVisited('e-stale')).toBe(false)
+    })
+
+    const inDexie = await db.visits.get('v-stale')
+    expect(inDexie).toBeUndefined()
   })
 })
