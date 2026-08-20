@@ -119,8 +119,7 @@ export default function Analytics() {
     const newValue = stats.leaderboardVisible ? 'false' : 'true'
     const { error: updateError } = await supabase
       .from('settings')
-      .update({ value: newValue })
-      .eq('key', 'leaderboard_visible')
+      .upsert({ key: 'leaderboard_visible', value: newValue })
     if (updateError) {
       setError(updateError.message)
     } else {
