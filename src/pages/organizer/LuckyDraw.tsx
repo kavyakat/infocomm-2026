@@ -54,7 +54,7 @@ export default function LuckyDraw() {
   const [pool, setPool] = useState<Candidate[]>([])
   const [loading, setLoading] = useState(true)
   const [drawing, setDrawing] = useState(false)
-  const [revealing, setRevealing] = useState(false)
+  const [newWinnerRank, setNewWinnerRank] = useState<number | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -122,7 +122,6 @@ export default function LuckyDraw() {
     if (next === null || pool.length === 0) return
 
     setDrawing(true)
-    setRevealing(true)
 
     const winnerId = weightedDraw(pool.map(c => ({ id: c.id, score: c.score })))
     const winnerCandidate = pool.find(c => c.id === winnerId)!
@@ -134,7 +133,6 @@ export default function LuckyDraw() {
     if (insertError) {
       setError(insertError.message)
       setDrawing(false)
-      setRevealing(false)
       return
     }
 
@@ -147,11 +145,13 @@ export default function LuckyDraw() {
 
     setWinners(prev => [...prev, newWinner].sort((a, b) => a.prize_rank - b.prize_rank))
     setPool(prev => prev.filter(c => c.id !== winnerId))
-
-    setTimeout(() => {
-      setRevealing(false)
-      setDrawing(false)
-    }, 800)
+    setNewWinnerRank(next)
+    setDrawing(false)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setNewWinnerRank(null)
+      })
+    })
   }
 
   const nextRank = nextPrizeRank(winners.map(w => w.prize_rank))
@@ -199,12 +199,12 @@ export default function LuckyDraw() {
             {winners.length > 0 && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-gray-800">Winners</h2>
-                {winners.map((w, i) => {
-                  const isNew = i === winners.length - 1 && drawing
+                {winners.map((w) => {
+                  const isNew = w.prize_rank === newWinnerRank
                   return (
                     <div
                       key={w.prize_rank}
-                      className={`transition-opacity duration-500 ${isNew && revealing ? 'opacity-0' : 'opacity-100'}`}
+                      className={`transition-opacity duration-500 ${isNew ? 'opacity-0' : 'opacity-100'}`}
                     >
                       <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
                         <span className="text-3xl">{RANK_BADGE[w.prize_rank]}</span>
