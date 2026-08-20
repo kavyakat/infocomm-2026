@@ -1,0 +1,90 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+
+export default function Register() {
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password: mobile,
+    })
+
+    if (signUpError) { setError(signUpError.message); setLoading(false); return }
+
+    const userId = data.user?.id
+    if (!userId) { setError('Registration failed'); setLoading(false); return }
+
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id: userId, name, email, mobile, role: 'visitor'
+    })
+
+    if (profileError) { setError(profileError.message); setLoading(false); return }
+
+    navigate('/')
+  }
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        <div className="bg-primary text-white text-center py-4 px-6 rounded-t-2xl">
+          <h1 className="text-xl font-bold">InfoComm India 2026</h1>
+          <p className="text-sm opacity-80">Visitor Registration</p>
+        </div>
+        <form onSubmit={handleSubmit} className="border border-gray-200 rounded-b-2xl p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              required
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+            <input
+              type="tel"
+              required
+              value={mobile}
+              onChange={e => setMobile(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary text-white rounded-lg py-3 font-semibold disabled:opacity-50"
+          >
+            {loading ? 'Creating account…' : 'Get Started'}
+          </button>
+          <p className="text-center text-sm text-gray-500">
+            Already registered?{' '}
+            <a href="/login" className="text-primary font-medium">Sign in</a>
+          </p>
+        </form>
+      </div>
+    </div>
+  )
+}
