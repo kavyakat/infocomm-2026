@@ -51,6 +51,7 @@ type Stats = {
   totalExhibitors: number
   eligible: number
   hallDist: Array<{ hall: string; exhibitorCount: number; visitCount: number }>
+  leaderboardVisible: boolean
 }
 
 function StatCard({ value, label }: { value: number | string; label: string }) {
@@ -78,6 +79,7 @@ export default function Analytics() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [togglingLeaderboard, setTogglingLeaderboard] = useState(false)
   const [error, setError] = useState('')
 
   async function handleExport() {
@@ -111,11 +113,28 @@ export default function Analytics() {
     }
   }
 
+  async function handleToggleLeaderboard() {
+    if (!stats) return
+    setTogglingLeaderboard(true)
+    const newValue = stats.leaderboardVisible ? 'false' : 'true'
+    const { error: updateError } = await supabase
+      .from('settings')
+      .update({ value: newValue })
+      .eq('key', 'leaderboard_visible')
+    if (updateError) {
+      setError(updateError.message)
+    } else {
+      setStats({ ...stats, leaderboardVisible: newValue === 'true' })
+    }
+    setTogglingLeaderboard(false)
+  }
+
   useEffect(() => {
     async function load() {
-      const [visitsRes, exhibitorsRes] = await Promise.all([
+      const [visitsRes, exhibitorsRes, settingsRes] = await Promise.all([
         supabase.from('visits').select('visitor_id, day, exhibitor_id'),
         supabase.from('exhibitors').select('id, hall'),
+        supabase.from('settings').select('value').eq('key', 'leaderboard_visible').single(),
       ])
 
       if (visitsRes.error) { setError(visitsRes.error.message); setLoading(false); return }
@@ -136,8 +155,9 @@ export default function Analytics() {
 
       const eligible = eligibleCount(visitsByVisitor)
       const hallDist = buildHallDistribution(allExhibitors, allVisits)
+      const leaderboardVisible = settingsRes.data?.value === 'true'
 
-      setStats({ totalVisits, uniqueVisitors, totalExhibitors, eligible, hallDist })
+      setStats({ totalVisits, uniqueVisitors, totalExhibitors, eligible, hallDist, leaderboardVisible })
       setLoading(false)
     }
 
@@ -225,6 +245,30 @@ export default function Analytics() {
                   </table>
                 </div>
               )}
+            </div>
+
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Visitor Leaderboard</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">
+                    Status: <span className={stats.leaderboardVisible ? 'text-green-600 font-semibold' : 'text-gray-700 font-semibold'}>
+                      {stats.leaderboardVisible ? 'Shown to visitors' : 'Hidden from visitors'}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleLeaderboard}
+                  disabled={togglingLeaderboard}
+                  className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {togglingLeaderboard
+                    ? 'Saving…'
+                    : stats.leaderboardVisible
+                    ? 'Hide from Visitors'
+                    : 'Show to Visitors'}
+                </button>
+              </div>
             </div>
           </>
         ) : null}
