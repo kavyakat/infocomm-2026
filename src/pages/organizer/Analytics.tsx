@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { isEligible } from '../../lib/scoring'
+import { toCsv, downloadCsv } from '../../lib/export'
 
 export function eligibleCount(
   visitsByVisitor: Map<string, Array<{ day: 1 | 2 | 3 }>>
@@ -61,11 +62,51 @@ function StatCard({ value, label }: { value: number | string; label: string }) {
   )
 }
 
+const EXPORT_COLUMNS = [
+  'visitor_name',
+  'visitor_email',
+  'exhibitor_name',
+  'booth_number',
+  'hall',
+  'day',
+  'visited_at',
+  'rating',
+]
+
 export default function Analytics() {
   const { signOut } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  async function handleExport() {
+    const { data, error: fetchError } = await supabase
+      .from('visits')
+      .select('*, profiles(name, email), exhibitors(name, booth_number, hall)')
+
+    if (fetchError) {
+      setError(fetchError.message)
+      return
+    }
+
+    const rows = (data ?? []).map((v: Record<string, unknown>) => {
+      const profile = v.profiles as Record<string, unknown> | null
+      const exhibitor = v.exhibitors as Record<string, unknown> | null
+      return {
+        visitor_name: profile?.name ?? '',
+        visitor_email: profile?.email ?? '',
+        exhibitor_name: exhibitor?.name ?? '',
+        booth_number: exhibitor?.booth_number ?? '',
+        hall: exhibitor?.hall ?? '',
+        day: v.day,
+        visited_at: v.visited_at,
+        rating: v.rating,
+      }
+    })
+
+    const csv = toCsv(rows, EXPORT_COLUMNS)
+    downloadCsv('visits.csv', csv)
+  }
 
   useEffect(() => {
     async function load() {
@@ -114,7 +155,17 @@ export default function Analytics() {
       </nav>
 
       <div className="max-w-4xl mx-auto p-6 space-y-8">
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          {!loading && (
+            <button
+              onClick={handleExport}
+              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Export Visits CSV
+            </button>
+          )}
+        </div>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
 
