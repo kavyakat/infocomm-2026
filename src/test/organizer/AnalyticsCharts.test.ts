@@ -16,17 +16,19 @@ describe('buildHourlyDist', () => {
   })
 
   it('counts visits by hour correctly', () => {
+    // Use local-time constructor so getHours() matches regardless of timezone
+    const at9am = new Date(2026, 0, 1, 9, 0, 0).toISOString()
+    const at9_30am = new Date(2026, 0, 1, 9, 30, 0).toISOString()
+    const at2pm = new Date(2026, 0, 1, 14, 0, 0).toISOString()
     const visits = [
-      { visited_at: '2026-01-01T09:00:00Z' },
-      { visited_at: '2026-01-01T09:30:00Z' },
-      { visited_at: '2026-01-01T14:00:00Z' },
+      { visited_at: at9am },
+      { visited_at: at9_30am },
+      { visited_at: at2pm },
     ]
     const result = buildHourlyDist(visits)
-    const hour9 = new Date('2026-01-01T09:00:00Z').getUTCHours()
-    const hour14 = new Date('2026-01-01T14:00:00Z').getUTCHours()
-    expect(result[hour9].count).toBe(2)
-    expect(result[hour14].count).toBe(1)
-    const otherHours = result.filter(r => r.hour !== hour9 && r.hour !== hour14)
+    expect(result[9].count).toBe(2)
+    expect(result[14].count).toBe(1)
+    const otherHours = result.filter(r => r.hour !== 9 && r.hour !== 14)
     for (const { count } of otherHours) {
       expect(count).toBe(0)
     }

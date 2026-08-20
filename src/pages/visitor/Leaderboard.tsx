@@ -4,16 +4,38 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { calculateScore, type VisitRecord } from '../../lib/scoring'
 
-function formatName(name: string): string {
+export function formatName(name: string): string {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0]
   return `${parts[0]} ${parts[parts.length - 1][0]}.`
 }
 
-type LeaderboardEntry = {  id: string
-  name: string
-  score: number
-  visitCount: number
+type LeaderboardEntry = { id: string; name: string; score: number; visitCount: number }
+
+type RawVisit = {
+  visitor_id: string
+  exhibitor_id: string
+  hall: string
+  day: 1 | 2 | 3
+  rating: number | null
+}
+
+export function buildLeaderboardEntries(
+  profiles: Array<{ id: string; name: string }>,
+  rawVisits: RawVisit[]
+): LeaderboardEntry[] {
+  const byVisitor = new Map<string, VisitRecord[]>()
+  for (const v of rawVisits) {
+    if (!byVisitor.has(v.visitor_id)) byVisitor.set(v.visitor_id, [])
+    byVisitor.get(v.visitor_id)!.push({ exhibitor_id: v.exhibitor_id, hall: v.hall, day: v.day, rating: v.rating })
+  }
+
+  const entries: LeaderboardEntry[] = profiles.map(p => {
+    const visits = byVisitor.get(p.id) ?? []
+    return { id: p.id, name: p.name, score: calculateScore(visits), visitCount: visits.length }
+  })
+
+  return entries.sort((a, b) => b.score - a.score)
 }
 
 export default function Leaderboard() {
@@ -26,13 +48,16 @@ export default function Leaderboard() {
 
   useEffect(() => {
     async function load() {
-      const { data: setting } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'leaderboard_visible')
-        .single()
+      const isOrganizer = profile?.role === 'organizer'
 
-      if (setting?.value !== 'true') { setLoading(false); return }
+      if (!isOrganizer) {
+        const { data: setting } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'leaderboard_visible')
+          .single()
+        if (setting?.value !== 'true') { setLoading(false); return }
+      }
       setVisible(true)
 
       const [visitsRes, profilesRes] = await Promise.all([
@@ -51,32 +76,22 @@ export default function Leaderboard() {
         exhibitors: { hall: string } | null
       }>
 
-      const byVisitor = new Map<string, VisitRecord[]>()
-      for (const v of rawVisits) {
-        if (!byVisitor.has(v.visitor_id)) byVisitor.set(v.visitor_id, [])
-        byVisitor.get(v.visitor_id)!.push({
+      setEntries(buildLeaderboardEntries(
+        profilesRes.data ?? [],
+        rawVisits.map(v => ({
+          visitor_id: v.visitor_id,
           exhibitor_id: v.exhibitor_id,
           hall: v.exhibitors?.hall ?? '',
           day: v.day,
           rating: v.rating,
-        })
-      }
+        }))
+      ))
 
-      const profileMap = new Map((profilesRes.data ?? []).map(p => [p.id, p.name as string]))
-
-      const ranked: LeaderboardEntry[] = []
-      for (const [id, name] of profileMap.entries()) {
-        const visitorVisits = byVisitor.get(id) ?? []
-        ranked.push({ id, name, score: calculateScore(visitorVisits), visitCount: visitorVisits.length })
-      }
-
-      ranked.sort((a, b) => b.score - a.score)
-      setEntries(ranked)
       setLoading(false)
     }
 
     load().catch(err => { setError(String(err)); setLoading(false) })
-  }, [])
+  }, [profile])
 
   return (
     <div className="min-h-screen bg-gray-50">
