@@ -3,17 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase, type Exhibitor } from '../../lib/supabase'
 import { generatePin } from '../../lib/pins'
 import { useAuth } from '../../hooks/useAuth'
-
-export function parseExhibitorCsv(csv: string): Array<{ name: string; booth_number: string; hall: string }> {
-  const lines = csv.trim().split('\n')
-  // skip header row
-  return lines.slice(1).flatMap(line => {
-    const cols = line.split(',').map(c => c.trim())
-    const [name, booth_number, hall] = cols
-    if (!name || !booth_number || !hall) return []
-    return [{ name, booth_number, hall }]
-  })
-}
+import { parseExhibitorCsv } from '../../lib/exhibitors'
 
 export default function Exhibitors() {
   const { signOut } = useAuth()
@@ -24,13 +14,19 @@ export default function Exhibitors() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function loadExhibitors() {
-    setLoading(true)
     const { data } = await supabase.from('exhibitors').select('*').order('name')
     setExhibitors(data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { loadExhibitors() }, [])
+  useEffect(() => {
+    async function init() {
+      const { data } = await supabase.from('exhibitors').select('*').order('name')
+      setExhibitors(data ?? [])
+      setLoading(false)
+    }
+    init()
+  }, [])
 
   async function handleCsvImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

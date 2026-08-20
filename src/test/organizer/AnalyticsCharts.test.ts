@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildHourlyDist, buildTopExhibitors, buildEngagementDist } from '../../pages/organizer/Analytics'
+import { buildHourlyDist, buildTopExhibitors, buildEngagementDist } from '../../lib/analytics'
 
 describe('buildHourlyDist', () => {
   it('returns exactly 24 entries', () => {

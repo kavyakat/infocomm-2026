@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import { parseExhibitorCsv } from '../../pages/organizer/Exhibitors'
+import { parseExhibitorCsv } from '../../lib/exhibitors'
 
 // ── parseExhibitorCsv ──────────────────────────────────────────────────────
 

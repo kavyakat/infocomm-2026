@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildLeaderboardEntries, formatName } from '../../pages/visitor/Leaderboard'
+import { buildLeaderboardEntries, formatName } from '../../lib/leaderboard'
 
 const visit = (visitor_id: string, hall = 'H1') => ({
   visitor_id,

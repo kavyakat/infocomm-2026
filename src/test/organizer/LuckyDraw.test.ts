@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCandidates, nextPrizeRank } from '../../pages/organizer/LuckyDraw'
+import { buildCandidates, nextPrizeRank } from '../../lib/luckyDraw'
 
 const day1Visits = (n: number, hall = 'H1') =>
   Array.from({ length: n }, () => ({ visitor_id: 'v1', day: 1 as const, hall, rating: null }))

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { eligibleCount, buildHallDistribution } from '../../pages/organizer/Analytics'
+import { eligibleCount, buildHallDistribution } from '../../lib/analytics'
 
 describe('eligibleCount', () => {
   it('counts only visitors with ≥10 visits on day 1 AND ≥10 on day 2', () => {

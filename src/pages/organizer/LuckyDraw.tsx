@@ -2,47 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { isEligible, calculateScore, weightedDraw, type VisitRecord } from '../../lib/scoring'
-
-export type Candidate = { id: string; name: string; email: string; score: number }
-export type Winner = { prize_rank: 1 | 2 | 3; name: string; email: string; score: number }
-
-export function buildCandidates(
-  allVisits: Array<{ visitor_id: string; day: 1 | 2 | 3; hall: string; rating: number | null }>,
-  profiles: Map<string, { name: string; email: string }>
-): Candidate[] {
-  const byVisitor = new Map<string, VisitRecord[]>()
-  for (const v of allVisits) {
-    if (!byVisitor.has(v.visitor_id)) byVisitor.set(v.visitor_id, [])
-    byVisitor.get(v.visitor_id)!.push({
-      exhibitor_id: '',
-      hall: v.hall,
-      day: v.day,
-      rating: v.rating,
-    })
-  }
-
-  const candidates: Candidate[] = []
-  for (const [visitorId, visits] of byVisitor.entries()) {
-    if (!isEligible(visits)) continue
-    const profile = profiles.get(visitorId)
-    if (!profile) continue
-    candidates.push({
-      id: visitorId,
-      name: profile.name,
-      email: profile.email,
-      score: calculateScore(visits),
-    })
-  }
-  return candidates
-}
-
-export function nextPrizeRank(existingWinners: number[]): 1 | 2 | 3 | null {
-  for (const rank of [1, 2, 3] as const) {
-    if (!existingWinners.includes(rank)) return rank
-  }
-  return null
-}
+import { weightedDraw } from '../../lib/scoring'
+import { buildCandidates, nextPrizeRank, type Candidate, type Winner } from '../../lib/luckyDraw'
 
 const RANK_BADGE: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 const RANK_LABEL: Record<number, string> = { 1: '1st Prize', 2: '2nd Prize', 3: '3rd Prize' }
@@ -58,64 +19,64 @@ export default function LuckyDraw() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    load().catch(err => { setError(String(err)); setLoading(false) })
-  }, [])
+    async function load() {
+      const [visitsRes, profilesRes, winnersRes] = await Promise.all([
+        supabase.from('visits').select('visitor_id, day, exhibitor_id, rating, exhibitors(hall)'),
+        supabase.from('profiles').select('id, name, email'),
+        supabase.from('lucky_draw_winners').select('prize_rank, visitor_id, profiles(name, email)').order('prize_rank'),
+      ])
 
-  async function load() {
-    const [visitsRes, profilesRes, winnersRes] = await Promise.all([
-      supabase.from('visits').select('visitor_id, day, exhibitor_id, rating, exhibitors(hall)'),
-      supabase.from('profiles').select('id, name, email'),
-      supabase.from('lucky_draw_winners').select('prize_rank, visitor_id, profiles(name, email)').order('prize_rank'),
-    ])
+      if (visitsRes.error) { setError(visitsRes.error.message); setLoading(false); return }
+      if (profilesRes.error) { setError(profilesRes.error.message); setLoading(false); return }
+      if (winnersRes.error) { setError(winnersRes.error.message); setLoading(false); return }
 
-    if (visitsRes.error) { setError(visitsRes.error.message); setLoading(false); return }
-    if (profilesRes.error) { setError(profilesRes.error.message); setLoading(false); return }
-    if (winnersRes.error) { setError(winnersRes.error.message); setLoading(false); return }
+      const rawVisits = (visitsRes.data ?? []) as unknown as Array<{
+        visitor_id: string
+        day: 1 | 2 | 3
+        exhibitor_id: string
+        rating: number | null
+        exhibitors: { hall: string } | null
+      }>
 
-    const rawVisits = (visitsRes.data ?? []) as unknown as Array<{
-      visitor_id: string
-      day: 1 | 2 | 3
-      exhibitor_id: string
-      rating: number | null
-      exhibitors: { hall: string } | null
-    }>
+      const flatVisits = rawVisits.map(v => ({
+        visitor_id: v.visitor_id,
+        day: v.day,
+        hall: v.exhibitors?.hall ?? '',
+        rating: v.rating,
+      }))
 
-    const flatVisits = rawVisits.map(v => ({
-      visitor_id: v.visitor_id,
-      day: v.day,
-      hall: v.exhibitors?.hall ?? '',
-      rating: v.rating,
-    }))
+      const profileMap = new Map<string, { name: string; email: string }>()
+      for (const p of profilesRes.data ?? []) {
+        profileMap.set(p.id, { name: p.name, email: p.email })
+      }
 
-    const profileMap = new Map<string, { name: string; email: string }>()
-    for (const p of profilesRes.data ?? []) {
-      profileMap.set(p.id, { name: p.name, email: p.email })
+      const allCandidates = buildCandidates(flatVisits, profileMap)
+      setEligibleCount(allCandidates.length)
+
+      const previousWinners = (winnersRes.data ?? []).map(w => {
+        const pr = w as unknown as {
+          prize_rank: number
+          visitor_id: string
+          profiles: { name: string; email: string } | null
+        }
+        const score = allCandidates.find(c => c.id === pr.visitor_id)?.score ?? 0
+        return {
+          prize_rank: pr.prize_rank as 1 | 2 | 3,
+          visitor_id: pr.visitor_id,
+          name: pr.profiles?.name ?? 'Unknown',
+          email: pr.profiles?.email ?? '',
+          score,
+        }
+      })
+      setWinners(previousWinners.map(({ visitor_id: _vid, ...rest }) => rest as Winner))
+
+      const drawnIds = new Set(previousWinners.map(w => w.visitor_id))
+      setPool(allCandidates.filter(c => !drawnIds.has(c.id)))
+      setLoading(false)
     }
 
-    const allCandidates = buildCandidates(flatVisits, profileMap)
-    setEligibleCount(allCandidates.length)
-
-    const previousWinners = (winnersRes.data ?? []).map(w => {
-      const pr = w as unknown as {
-        prize_rank: number
-        visitor_id: string
-        profiles: { name: string; email: string } | null
-      }
-      const score = allCandidates.find(c => c.id === pr.visitor_id)?.score ?? 0
-      return {
-        prize_rank: pr.prize_rank as 1 | 2 | 3,
-        visitor_id: pr.visitor_id,
-        name: pr.profiles?.name ?? 'Unknown',
-        email: pr.profiles?.email ?? '',
-        score,
-      }
-    })
-    setWinners(previousWinners.map(({ visitor_id: _vid, ...rest }) => rest as Winner))
-
-    const drawnIds = new Set(previousWinners.map(w => w.visitor_id))
-    setPool(allCandidates.filter(c => !drawnIds.has(c.id)))
-    setLoading(false)
-  }
+    load().catch(err => { setError(String(err)); setLoading(false) })
+  }, [])
 
   async function runDraw() {
     const next = nextPrizeRank(winners.map(w => w.prize_rank))
