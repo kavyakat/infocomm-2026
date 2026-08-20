@@ -147,11 +147,8 @@ export default function LuckyDraw() {
     setPool(prev => prev.filter(c => c.id !== winnerId))
     setNewWinnerRank(next)
     setDrawing(false)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setNewWinnerRank(null)
-      })
-    })
+    // 50ms is enough for React to commit and browser to paint opacity-0 before the CSS transition fires
+    setTimeout(() => setNewWinnerRank(null), 50)
   }
 
   const nextRank = nextPrizeRank(winners.map(w => w.prize_rank))
