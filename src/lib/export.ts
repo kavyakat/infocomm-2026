@@ -3,7 +3,7 @@ export function toCsv(rows: Record<string, unknown>[], columns: string[]): strin
 
   function cell(value: unknown): string {
     const str = String(value ?? '')
-    if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+    if (str.includes(',') || str.includes('\n') || str.includes('\r') || str.includes('"')) {
       return '"' + str.replaceAll('"', '""') + '"'
     }
     return str
@@ -23,6 +23,8 @@ export function downloadCsv(filename: string, content: string): void {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }

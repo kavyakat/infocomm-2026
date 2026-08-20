@@ -77,35 +77,38 @@ export default function Analytics() {
   const { signOut } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
 
   async function handleExport() {
-    const { data, error: fetchError } = await supabase
-      .from('visits')
-      .select('*, profiles(name, email), exhibitors(name, booth_number, hall)')
+    setExporting(true)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('visits')
+        .select('*, profiles(name, email), exhibitors(name, booth_number, hall)')
 
-    if (fetchError) {
-      setError(fetchError.message)
-      return
-    }
+      if (fetchError) { setError(fetchError.message); return }
 
-    const rows = (data ?? []).map((v: Record<string, unknown>) => {
-      const profile = v.profiles as Record<string, unknown> | null
-      const exhibitor = v.exhibitors as Record<string, unknown> | null
-      return {
-        visitor_name: profile?.name ?? '',
-        visitor_email: profile?.email ?? '',
-        exhibitor_name: exhibitor?.name ?? '',
-        booth_number: exhibitor?.booth_number ?? '',
-        hall: exhibitor?.hall ?? '',
-        day: v.day,
-        visited_at: v.visited_at,
-        rating: v.rating,
-      }
-    })
+      const rows = (data ?? []).map((v: Record<string, unknown>) => {
+        const profile = v.profiles as Record<string, unknown> | null
+        const exhibitor = v.exhibitors as Record<string, unknown> | null
+        return {
+          visitor_name: profile?.name ?? '',
+          visitor_email: profile?.email ?? '',
+          exhibitor_name: exhibitor?.name ?? '',
+          booth_number: exhibitor?.booth_number ?? '',
+          hall: exhibitor?.hall ?? '',
+          day: v.day,
+          visited_at: v.visited_at,
+          rating: v.rating,
+        }
+      })
 
     const csv = toCsv(rows, EXPORT_COLUMNS)
     downloadCsv('visits.csv', csv)
+    } finally {
+      setExporting(false)
+    }
   }
 
   useEffect(() => {
@@ -160,9 +163,10 @@ export default function Analytics() {
           {!loading && (
             <button
               onClick={handleExport}
-              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+              disabled={exporting}
+              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              Export Visits CSV
+              {exporting ? 'Exporting…' : 'Export Visits CSV'}
             </button>
           )}
         </div>
