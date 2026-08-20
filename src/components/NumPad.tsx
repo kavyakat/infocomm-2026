@@ -3,9 +3,10 @@ interface Props {
   onChange: (val: string) => void
   onConfirm: () => void
   error?: string
+  disabled?: boolean
 }
 
-export default function NumPad({ value, onChange, onConfirm, error }: Props) {
+export default function NumPad({ value, onChange, onConfirm, error, disabled }: Props) {
   function press(digit: string) {
     if (value.length < 4) onChange(value + digit)
   }
@@ -36,20 +37,23 @@ export default function NumPad({ value, onChange, onConfirm, error }: Props) {
       {/* Grid */}
       <div className="grid grid-cols-3 gap-3">
         {digits.map((d, i) => (
-          <button
-            key={i}
-            onClick={() => d === '⌫' ? backspace() : d ? press(d) : undefined}
-            className={`h-16 rounded-2xl text-xl font-semibold
-              ${d === '' ? 'invisible' : 'bg-gray-100 active:bg-gray-200'}`}
-          >
-            {d}
-          </button>
+          d === '' ? (
+            <div key={i} />
+          ) : (
+            <button
+              key={i}
+              onClick={() => d === '⌫' ? backspace() : press(d)}
+              className="h-16 rounded-2xl text-xl font-semibold bg-gray-100 active:bg-gray-200"
+            >
+              {d}
+            </button>
+          )
         ))}
       </div>
 
       <button
         onClick={onConfirm}
-        disabled={value.length < 4}
+        disabled={value.length < 4 || disabled}
         className="w-full bg-primary text-white rounded-xl py-4 font-semibold text-lg disabled:opacity-40"
       >
         Confirm

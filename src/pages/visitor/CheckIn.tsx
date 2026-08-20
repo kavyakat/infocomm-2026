@@ -16,19 +16,21 @@ export default function CheckIn() {
   const [pin, setPin] = useState('')
   const [step, setStep] = useState<Step>('pin')
   const [error, setError] = useState('')
+  const [confirming, setConfirming] = useState(false)
   const [confirmedExhibitorName, setConfirmedExhibitorName] = useState('')
   const [visitId] = useState(() => crypto.randomUUID())
   const [visitTime] = useState(() => new Date())
 
   async function handleConfirmPin() {
-    if (!exhibitorId || !profile) return
+    if (!exhibitorId || !profile || confirming) return
+    setConfirming(true)
     setError('')
 
     const exhibitor = await db.exhibitors.get(exhibitorId)
-    if (!exhibitor) { setError('Exhibitor not found'); return }
+    if (!exhibitor) { setError('Exhibitor not found'); setConfirming(false); return }
 
     const valid = await verifyPin(pin, exhibitor.pin_hash)
-    if (!valid) { setError('Incorrect PIN. Please try again.'); setPin(''); return }
+    if (!valid) { setError('Incorrect PIN. Please try again.'); setPin(''); setConfirming(false); return }
 
     const existing = await db.visits
       .where('visitor_id').equals(profile.id)
@@ -38,10 +40,12 @@ export default function CheckIn() {
     if (existing) {
       const date = new Date(existing.visited_at).toLocaleDateString()
       setError(`You already visited this exhibitor on ${date}.`)
+      setConfirming(false)
       return
     }
 
     setConfirmedExhibitorName(exhibitor.name)
+    setConfirming(false)
     setStep('rating')
   }
 
@@ -93,7 +97,7 @@ export default function CheckIn() {
       <button onClick={() => navigate(-1)} className="text-primary text-sm mb-6">← Back</button>
       <h2 className="text-xl font-bold text-gray-800 mb-2">Enter Exhibitor PIN</h2>
       <p className="text-sm text-gray-500 mb-8">Ask the exhibitor to enter their 4-digit PIN</p>
-      <NumPad value={pin} onChange={setPin} onConfirm={handleConfirmPin} error={error} />
+      <NumPad value={pin} onChange={setPin} onConfirm={handleConfirmPin} error={error} disabled={confirming} />
     </div>
   )
 }
