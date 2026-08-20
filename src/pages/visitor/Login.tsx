@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 export default function Login() {
@@ -59,7 +59,7 @@ export default function Login() {
           </button>
           <p className="text-center text-sm text-gray-500">
             New visitor?{' '}
-            <a href="/register" className="text-primary font-medium">Register here</a>
+            <Link to="/register" className="text-primary font-medium">Register here</Link>
           </p>
         </form>
       </div>
