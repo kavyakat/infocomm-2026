@@ -65,14 +65,13 @@ export default function Leaderboard() {
       const profileMap = new Map((profilesRes.data ?? []).map(p => [p.id, p.name as string]))
 
       const ranked: LeaderboardEntry[] = []
-      for (const [id, visits] of byVisitor.entries()) {
-        const name = profileMap.get(id)
-        if (!name) continue
-        ranked.push({ id, name, score: calculateScore(visits), visitCount: visits.length })
+      for (const [id, name] of profileMap.entries()) {
+        const visitorVisits = byVisitor.get(id) ?? []
+        ranked.push({ id, name, score: calculateScore(visitorVisits), visitCount: visitorVisits.length })
       }
 
       ranked.sort((a, b) => b.score - a.score)
-      setEntries(ranked.slice(0, 20))
+      setEntries(ranked)
       setLoading(false)
     }
 
