@@ -97,7 +97,7 @@ export default function Analytics() {
       setLoading(false)
     }
 
-    load()
+    load().catch(err => { setError(String(err)); setLoading(false) })
   }, [])
 
   return (
