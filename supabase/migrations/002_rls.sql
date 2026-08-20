@@ -1,8 +1,9 @@
 -- Helper: bypass RLS to check organizer role
 create or replace function is_organizer()
-returns boolean language sql security definer as $$
+returns boolean language sql security definer
+set search_path = '' as $$
   select exists (
-    select 1 from profiles where id = auth.uid() and role = 'organizer'
+    select 1 from public.profiles where id = auth.uid() and role = 'organizer'
   )
 $$;
 
@@ -14,6 +15,9 @@ create policy "profiles: insert own" on profiles
 
 create policy "profiles: select own" on profiles
   for select using (auth.uid() = id or is_organizer());
+
+create policy "profiles: update own" on profiles
+  for update using (auth.uid() = id) with check (auth.uid() = id);
 
 -- exhibitors
 alter table exhibitors enable row level security;
@@ -32,6 +36,9 @@ create policy "visits: insert own" on visits
 
 create policy "visits: select own or organizer" on visits
   for select using (auth.uid() = visitor_id or is_organizer());
+
+create policy "visits: delete organizer" on visits
+  for delete using (is_organizer());
 
 -- lucky_draw_winners
 alter table lucky_draw_winners enable row level security;

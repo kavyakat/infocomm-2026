@@ -1,9 +1,10 @@
 create table profiles (
   id uuid primary key references auth.users on delete cascade,
   name text not null,
-  email text not null,
+  email text not null unique,
   mobile text not null,
-  role text not null check (role in ('visitor', 'organizer'))
+  role text not null check (role in ('visitor', 'organizer')),
+  created_at timestamptz default now()
 );
 
 create table exhibitors (
@@ -11,7 +12,7 @@ create table exhibitors (
   name text not null,
   booth_number text not null,
   hall text not null,
-  pin char(4) not null unique,
+  pin text not null unique check (pin ~ '^\d{4}$'),
   created_at timestamptz default now()
 );
 
@@ -28,6 +29,6 @@ create table visits (
 create table lucky_draw_winners (
   id uuid primary key default gen_random_uuid(),
   visitor_id uuid not null references profiles(id) on delete cascade,
-  prize_rank smallint not null,
+  prize_rank smallint not null unique,
   drawn_at timestamptz default now()
 );
