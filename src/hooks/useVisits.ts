@@ -23,6 +23,7 @@ export function useVisits(visitorId: string) {
   }
 
   async function refreshVisits() {
+    if (!visitorId) return
     const updated = await db.visits.where('visitor_id').equals(visitorId).toArray()
     setVisits(updated)
   }
