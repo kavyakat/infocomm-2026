@@ -17,7 +17,7 @@ describe('calculateScore', () => {
 
   it('uses given rating for rated visits', () => {
     const visits = [makeVisit('H1', 1, 5)]
-    // 1 visit + 5 halls×0 + 1 day + 5 rating = 1 + 5 + 3 + 5 = 14
+    // 1 visit×1 + 1 hall×5 + 1 day×3 + 5 rating = 14
     expect(calculateScore(visits)).toBe(14)
   })
 

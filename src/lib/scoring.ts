@@ -20,6 +20,7 @@ export function isEligible(visits: VisitRecord[]): boolean {
 }
 
 export function weightedDraw(candidates: Array<{ id: string; score: number }>): string {
+  if (candidates.length === 0) throw new Error('weightedDraw: candidates array is empty')
   const total = candidates.reduce((sum, c) => sum + c.score, 0)
   let r = Math.random() * total
   for (const c of candidates) {
