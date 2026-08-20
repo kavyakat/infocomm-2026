@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useExhibitors } from '../../hooks/useExhibitors'
 import { useVisits } from '../../hooks/useVisits'
 import { useAuth } from '../../hooks/useAuth'
@@ -31,7 +31,10 @@ export default function ExhibitorList() {
           <p className="font-bold text-sm">InfoComm India 2026</p>
           <p className="text-xs opacity-70">Hi, {profile?.name}</p>
         </div>
-        <button onClick={signOut} className="text-xs opacity-70">Sign out</button>
+        <div className="flex items-center gap-3">
+          <Link to="/leaderboard" className="text-xs opacity-70">Leaderboard</Link>
+          <button onClick={signOut} className="text-xs opacity-70">Sign out</button>
+        </div>
       </header>
 
       <div className="p-4 space-y-3">

@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 interface Props {
   value: string
   onChange: (val: string) => void
@@ -14,6 +16,17 @@ export default function NumPad({ value, onChange, onConfirm, error, disabled }: 
   function backspace() {
     onChange(value.slice(0, -1))
   }
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (disabled) return
+      if (e.key >= '0' && e.key <= '9') press(e.key)
+      else if (e.key === 'Backspace') backspace()
+      else if (e.key === 'Enter' && value.length === 4) onConfirm()
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [value, disabled])
 
   const digits = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 

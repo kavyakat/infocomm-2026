@@ -9,6 +9,7 @@ export async function flushVisitQueue(): Promise<void> {
 
   try {
     const pending = await db.visits.where('synced').equals(0).toArray()
+      .then(rows => rows.length ? rows : db.visits.filter(v => !v.synced).toArray())
     if (pending.length === 0) return
 
     for (const visit of pending) {

@@ -4,8 +4,13 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { calculateScore, type VisitRecord } from '../../lib/scoring'
 
-type LeaderboardEntry = {
-  id: string
+function formatName(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`
+}
+
+type LeaderboardEntry = {  id: string
   name: string
   score: number
   visitCount: number
@@ -108,11 +113,9 @@ export default function Leaderboard() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className={`font-medium truncate ${isMe ? 'text-primary' : 'text-gray-900'}`}>
-                      {entry.name}{isMe && ' (You)'}
+                      {formatName(entry.name)}{isMe && ' (You)'}
                     </div>
-                    <div className="text-xs text-gray-500">{entry.visitCount} visits</div>
                   </div>
-                  <div className="text-sm font-bold text-gray-700">{entry.score.toFixed(1)}</div>
                 </div>
               )
             })}

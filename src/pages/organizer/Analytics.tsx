@@ -45,6 +45,60 @@ export function buildHallDistribution(
     .sort((a, b) => b.visitCount - a.visitCount)
 }
 
+export function buildHourlyDist(
+  visits: Array<{ visited_at: string }>
+): Array<{ hour: number; count: number }> {
+  const counts = new Array(24).fill(0)
+  for (const v of visits) {
+    if (v.visited_at) {
+      const hour = new Date(v.visited_at).getUTCHours()
+      if (hour >= 0 && hour < 24) counts[hour]++
+    }
+  }
+  return counts.map((count, hour) => ({ hour, count }))
+}
+
+export function buildTopExhibitors(
+  visits: Array<{ exhibitor_id: string }>,
+  exhibitors: Array<{ id: string; name: string; booth_number: string }>,
+  n = 10
+): Array<{ name: string; booth: string; count: number }> {
+  const counts = new Map<string, number>()
+  for (const v of visits) {
+    counts.set(v.exhibitor_id, (counts.get(v.exhibitor_id) ?? 0) + 1)
+  }
+
+  const exMap = new Map(exhibitors.map(e => [e.id, e]))
+
+  return Array.from(counts.entries())
+    .filter(([id]) => exMap.has(id))
+    .map(([id, count]) => {
+      const ex = exMap.get(id)!
+      return { name: ex.name, booth: ex.booth_number, count }
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n)
+}
+
+export function buildEngagementDist(
+  visitsByVisitor: Map<string, number>
+): Array<{ bucket: string; count: number }> {
+  const buckets = [
+    { bucket: '1', min: 1, max: 1 },
+    { bucket: '2–5', min: 2, max: 5 },
+    { bucket: '6–10', min: 6, max: 10 },
+    { bucket: '11–15', min: 11, max: 15 },
+    { bucket: '16+', min: 16, max: Infinity },
+  ]
+
+  const counts = new Array(buckets.length).fill(0)
+  for (const n of visitsByVisitor.values()) {
+    const idx = buckets.findIndex(b => n >= b.min && n <= b.max)
+    if (idx !== -1) counts[idx]++
+  }
+  return buckets.map((b, i) => ({ bucket: b.bucket, count: counts[i] }))
+}
+
 type Stats = {
   totalVisits: number
   uniqueVisitors: number
@@ -52,6 +106,11 @@ type Stats = {
   eligible: number
   hallDist: Array<{ hall: string; exhibitorCount: number; visitCount: number }>
   leaderboardVisible: boolean
+  hourlyDist: Array<{ hour: number; count: number }>
+  dailyDist: Array<{ day: number; count: number }>
+  topExhibitors: Array<{ name: string; booth: string; count: number }>
+  ratingDist: Array<{ label: string; count: number }>
+  engagementDist: Array<{ bucket: string; count: number }>
 }
 
 function StatCard({ value, label }: { value: number | string; label: string }) {
@@ -59,6 +118,19 @@ function StatCard({ value, label }: { value: number | string; label: string }) {
     <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
       <div className="text-3xl font-bold text-primary">{value}</div>
       <div className="text-sm text-gray-500 mt-1">{label}</div>
+    </div>
+  )
+}
+
+function HBar({ value, max, label, right }: { value: number; max: number; label: string; right?: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <div className="w-32 text-right text-gray-600 shrink-0 truncate">{label}</div>
+      <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+        <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="w-10 text-gray-700 font-medium shrink-0">{right ?? value}</div>
     </div>
   )
 }
@@ -73,6 +145,13 @@ const EXPORT_COLUMNS = [
   'visited_at',
   'rating',
 ]
+
+function hourLabel(hour: number): string {
+  if (hour === 0) return '12am'
+  if (hour < 12) return `${hour}am`
+  if (hour === 12) return '12pm'
+  return `${hour - 12}pm`
+}
 
 export default function Analytics() {
   const { signOut } = useAuth()
@@ -131,16 +210,27 @@ export default function Analytics() {
   useEffect(() => {
     async function load() {
       const [visitsRes, exhibitorsRes, settingsRes] = await Promise.all([
-        supabase.from('visits').select('visitor_id, day, exhibitor_id'),
-        supabase.from('exhibitors').select('id, hall'),
+        supabase.from('visits').select('visitor_id, day, exhibitor_id, visited_at, rating'),
+        supabase.from('exhibitors').select('id, hall, name, booth_number'),
         supabase.from('settings').select('value').eq('key', 'leaderboard_visible').single(),
       ])
 
       if (visitsRes.error) { setError(visitsRes.error.message); setLoading(false); return }
       if (exhibitorsRes.error) { setError(exhibitorsRes.error.message); setLoading(false); return }
 
-      const allVisits = (visitsRes.data ?? []) as Array<{ visitor_id: string; day: 1 | 2 | 3; exhibitor_id: string }>
-      const allExhibitors = (exhibitorsRes.data ?? []) as Array<{ id: string; hall: string }>
+      const allVisits = (visitsRes.data ?? []) as Array<{
+        visitor_id: string
+        day: 1 | 2 | 3
+        exhibitor_id: string
+        visited_at: string
+        rating: number | null
+      }>
+      const allExhibitors = (exhibitorsRes.data ?? []) as Array<{
+        id: string
+        hall: string
+        name: string
+        booth_number: string
+      }>
 
       const totalVisits = allVisits.length
       const uniqueVisitors = new Set(allVisits.map(v => v.visitor_id)).size
@@ -156,7 +246,53 @@ export default function Analytics() {
       const hallDist = buildHallDistribution(allExhibitors, allVisits)
       const leaderboardVisible = settingsRes.data?.value === 'true'
 
-      setStats({ totalVisits, uniqueVisitors, totalExhibitors, eligible, hallDist, leaderboardVisible })
+      const hourlyDist = buildHourlyDist(allVisits)
+
+      const dayCounts = new Map<number, number>()
+      for (const v of allVisits) {
+        dayCounts.set(v.day, (dayCounts.get(v.day) ?? 0) + 1)
+      }
+      const dailyDist = [1, 2, 3].map(day => ({ day, count: dayCounts.get(day) ?? 0 }))
+
+      const topExhibitors = buildTopExhibitors(allVisits, allExhibitors)
+
+      const ratingCounts = new Map<number, number>()
+      let noRating = 0
+      for (const v of allVisits) {
+        if (v.rating === null || v.rating === undefined) {
+          noRating++
+        } else {
+          ratingCounts.set(v.rating, (ratingCounts.get(v.rating) ?? 0) + 1)
+        }
+      }
+      const ratingDist = [
+        { label: '★☆☆☆☆', count: ratingCounts.get(1) ?? 0 },
+        { label: '★★☆☆☆', count: ratingCounts.get(2) ?? 0 },
+        { label: '★★★☆☆', count: ratingCounts.get(3) ?? 0 },
+        { label: '★★★★☆', count: ratingCounts.get(4) ?? 0 },
+        { label: '★★★★★', count: ratingCounts.get(5) ?? 0 },
+        { label: 'No rating', count: noRating },
+      ]
+
+      const visitorVisitCounts = new Map<string, number>()
+      for (const v of allVisits) {
+        visitorVisitCounts.set(v.visitor_id, (visitorVisitCounts.get(v.visitor_id) ?? 0) + 1)
+      }
+      const engagementDist = buildEngagementDist(visitorVisitCounts)
+
+      setStats({
+        totalVisits,
+        uniqueVisitors,
+        totalExhibitors,
+        eligible,
+        hallDist,
+        leaderboardVisible,
+        hourlyDist,
+        dailyDist,
+        topExhibitors,
+        ratingDist,
+        engagementDist,
+      })
       setLoading(false)
     }
 
@@ -244,6 +380,120 @@ export default function Analytics() {
                   </table>
                 </div>
               )}
+            </div>
+
+            {/* Visits by Time of Day */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Visits by Time of Day</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                {(() => {
+                  const maxCount = Math.max(...stats.hourlyDist.map(h => h.count), 1)
+                  return (
+                    <div className="flex items-end gap-1 h-24">
+                      {stats.hourlyDist.map(({ hour, count }) => {
+                        const heightPct = Math.round((count / maxCount) * 100)
+                        return (
+                          <div key={hour} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-full flex items-end justify-center" style={{ height: '80px' }}>
+                              <div
+                                className="w-full bg-primary rounded-t"
+                                style={{ height: `${heightPct}%` }}
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500 leading-none">
+                              {hour % 3 === 0 ? hourLabel(hour) : ''}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+
+            {/* Day-by-Day Traffic */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Day-by-Day Traffic</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                {(() => {
+                  const maxCount = Math.max(...stats.dailyDist.map(d => d.count), 1)
+                  return (
+                    <div className="flex items-end gap-4 h-32">
+                      {stats.dailyDist.map(({ day, count }) => {
+                        const heightPct = Math.round((count / maxCount) * 100)
+                        const isEmpty = count === 0
+                        return (
+                          <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="text-xs font-medium text-gray-700">{count > 0 ? count : ''}</div>
+                            <div className="w-full flex items-end justify-center" style={{ height: '96px' }}>
+                              <div
+                                className={`w-full rounded-t ${isEmpty ? 'bg-primary opacity-20' : 'bg-primary'}`}
+                                style={{ height: `${isEmpty ? 100 : heightPct}%` }}
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500">Day {day}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+
+            {/* Most Visited Exhibitors */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Most Visited Exhibitors</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                {stats.topExhibitors.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No visit data available.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const maxCount = stats.topExhibitors[0].count
+                      return stats.topExhibitors.map(ex => (
+                        <HBar
+                          key={`${ex.name}-${ex.booth}`}
+                          value={ex.count}
+                          max={maxCount}
+                          label={`${ex.name} (${ex.booth})`}
+                        />
+                      ))
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Rating Distribution */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Rating Distribution</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="space-y-3">
+                  {(() => {
+                    const maxCount = Math.max(...stats.ratingDist.map(r => r.count), 1)
+                    return stats.ratingDist.map(r => (
+                      <HBar key={r.label} value={r.count} max={maxCount} label={r.label} />
+                    ))
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Visitor Engagement */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">Visitor Engagement</h2>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="space-y-3">
+                  {(() => {
+                    const maxCount = Math.max(...stats.engagementDist.map(e => e.count), 1)
+                    return stats.engagementDist.map(e => (
+                      <HBar key={e.bucket} value={e.count} max={maxCount} label={e.bucket} />
+                    ))
+                  })()}
+                </div>
+              </div>
             </div>
 
             <div>
