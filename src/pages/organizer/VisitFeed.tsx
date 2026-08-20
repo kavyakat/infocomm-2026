@@ -33,15 +33,17 @@ export default function VisitFeed() {
   const [visits, setVisits] = useState<FeedVisit[]>([])
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     async function loadVisits() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('visits')
         .select('*, profiles(name), exhibitors(name, booth_number, hall)')
         .order('visited_at', { ascending: false })
         .limit(50)
-      setVisits((data as FeedVisit[]) ?? [])
+      if (error) { setError(error.message) }
+      setVisits((data ?? []) as FeedVisit[])
       setLoading(false)
     }
 
@@ -103,6 +105,8 @@ export default function VisitFeed() {
             {connected ? 'Live' : 'Connecting…'}
           </div>
         </div>
+
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
         {loading ? (
           <div className="flex justify-center py-12">
