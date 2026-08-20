@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { db } from '../../lib/db'
+import { flushVisitQueue } from '../../lib/sync'
 import { verifyPin } from '../../lib/pins'
 import { getCurrentEventDay } from '../../lib/eventDay'
 import NumPad from '../../components/NumPad'
@@ -62,6 +63,7 @@ export default function CheckIn() {
       synced: false,
     })
 
+    flushVisitQueue()
     setStep('confirmation')
   }
 

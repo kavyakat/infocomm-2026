@@ -51,7 +51,7 @@ export function buildHourlyDist(
   const counts = new Array(24).fill(0)
   for (const v of visits) {
     if (v.visited_at) {
-      const hour = new Date(v.visited_at).getUTCHours()
+      const hour = new Date(v.visited_at).getHours()
       if (hour >= 0 && hour < 24) counts[hour]++
     }
   }
