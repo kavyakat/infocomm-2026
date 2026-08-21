@@ -12,6 +12,12 @@ export default function Exhibitors() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', booth_number: '', hall: '' })
+  const [addError, setAddError] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   async function loadExhibitors() {
     const { data } = await supabase.from('exhibitors').select('*').order('name')
@@ -53,6 +59,31 @@ export default function Exhibitors() {
     }
     setImporting(false)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function handleAdd() {
+    if (!addForm.name.trim() || !addForm.booth_number.trim() || !addForm.hall.trim()) {
+      setAddError('All fields are required')
+      return
+    }
+    setAdding(true)
+    setAddError('')
+    const existingPins = new Set(exhibitors.map(ex => ex.pin))
+    const pin = generatePin(existingPins)
+    const { error } = await supabase.from('exhibitors').insert([{ ...addForm, pin }])
+    if (error) { setAddError(error.message); setAdding(false); return }
+    setAddForm({ name: '', booth_number: '', hall: '' })
+    setShowAddForm(false)
+    await loadExhibitors()
+    setAdding(false)
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    await supabase.from('exhibitors').delete().eq('id', id)
+    setConfirmDeleteId(null)
+    await loadExhibitors()
+    setDeleting(false)
   }
 
   async function regenPin(exhibitor: Exhibitor) {
@@ -102,7 +133,13 @@ export default function Exhibitors() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Exhibitors</h1>
           <div className="flex gap-3">
-            <label className="cursor-pointer bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <button
+              onClick={() => { setShowAddForm(v => !v); setAddError('') }}
+              className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+            >
+              {showAddForm ? 'Cancel' : '+ Add Exhibitor'}
+            </button>
+            <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
               {importing ? 'Importing…' : 'Import CSV'}
               <input
                 ref={fileRef}
@@ -122,6 +159,40 @@ export default function Exhibitors() {
           </div>
         </div>
 
+        {showAddForm && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700">New Exhibitor</h2>
+            <div className="grid grid-cols-3 gap-3">
+              <input
+                placeholder="Name"
+                value={addForm.name}
+                onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                placeholder="Booth number"
+                value={addForm.booth_number}
+                onChange={e => setAddForm(f => ({ ...f, booth_number: e.target.value }))}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                placeholder="Hall"
+                value={addForm.hall}
+                onChange={e => setAddForm(f => ({ ...f, hall: e.target.value }))}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            {addError && <p className="text-red-500 text-xs">{addError}</p>}
+            <button
+              onClick={handleAdd}
+              disabled={adding}
+              className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 hover:opacity-90"
+            >
+              {adding ? 'Adding…' : 'Add Exhibitor'}
+            </button>
+          </div>
+        )}
+
         {importError && <p className="text-red-500 text-sm">{importError}</p>}
 
         {loading ? (
@@ -129,7 +200,7 @@ export default function Exhibitors() {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : exhibitors.length === 0 ? (
-          <p className="text-gray-500 text-center py-12">No exhibitors yet. Import a CSV to get started.</p>
+          <p className="text-gray-500 text-center py-12">No exhibitors yet. Add one or import a CSV to get started.</p>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -150,12 +221,38 @@ export default function Exhibitors() {
                     <td className="px-4 py-3 text-gray-600">{ex.hall}</td>
                     <td className="px-4 py-3 font-mono font-bold text-primary">{ex.pin}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => regenPin(ex)}
-                        className="text-xs text-gray-500 hover:text-primary border border-gray-200 rounded px-2 py-1"
-                      >
-                        Regen PIN
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => regenPin(ex)}
+                          className="text-xs text-gray-500 hover:text-primary border border-gray-200 rounded px-2 py-1"
+                        >
+                          Regen PIN
+                        </button>
+                        {confirmDeleteId === ex.id ? (
+                          <>
+                            <button
+                              onClick={() => handleDelete(ex.id)}
+                              disabled={deleting}
+                              className="text-xs text-white bg-red-500 hover:bg-red-600 rounded px-2 py-1 disabled:opacity-50"
+                            >
+                              {deleting ? '…' : 'Confirm'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2 py-1"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(ex.id)}
+                            className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-1"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
